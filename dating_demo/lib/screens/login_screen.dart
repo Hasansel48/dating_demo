@@ -42,6 +42,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Email doğrulama kontrolü
         if (!userCredential.user!.emailVerified) {
+          // Kullanıcıyı çıkış yaptır
+          await _auth.signOut();
+          
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -49,14 +52,32 @@ class _LoginScreenState extends State<LoginScreen> {
                 action: SnackBarAction(
                   label: 'Yeniden Gönder',
                   onPressed: () async {
-                    await userCredential.user!.sendEmailVerification();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Doğrulama emaili gönderildi.'),
-                          backgroundColor: Colors.green,
-                        ),
+                    try {
+                      // Geçici olarak tekrar giriş yap
+                      final tempCred = await _auth.signInWithEmailAndPassword(
+                        email: _emailController.text.trim(),
+                        password: _passwordController.text,
                       );
+                      await tempCred.user!.sendEmailVerification();
+                      await _auth.signOut();
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Doğrulama emaili gönderildi.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Email gönderilemedi: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     }
                   },
                 ),

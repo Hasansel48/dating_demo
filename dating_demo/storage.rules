@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Profil fotoğrafları - kullanıcılar sadece kendi fotoğraflarını yükleyebilir
+    match /profiles/profile_{userId}.jpg {
+      // Herkes profil fotoğraflarını okuyabilir (authenticated users only)
+      allow read: if request.auth != null;
+      
+      // Kullanıcılar sadece kendi profil fotoğraflarını yazabilir ve silebilir
+      allow write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // Dosya boyutu kontrolü (max 5MB)
+      allow write: if request.resource.size < 5 * 1024 * 1024;
+      
+      // Sadece resim dosyalarına izin ver
+      allow write: if request.resource.contentType.matches('image/.*');
+    }
+  }
+}

@@ -64,7 +64,19 @@ class StorageService {
     try {
       final String fileName = 'profile_$userId.jpg';
       final Reference ref = _storage.ref().child('profiles/$fileName');
-      await ref.delete();
+      
+      // Dosyanın var olup olmadığını kontrol et
+      try {
+        await ref.getMetadata();
+        // Dosya varsa sil
+        await ref.delete();
+      } on FirebaseException catch (e) {
+        if (e.code == 'object-not-found') {
+          // Dosya zaten yok, hata vermeden devam et
+          return;
+        }
+        rethrow;
+      }
     } catch (e) {
       throw Exception('Fotoğraf silinemedi: $e');
     }
