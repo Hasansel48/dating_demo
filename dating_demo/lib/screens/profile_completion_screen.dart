@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_screen.dart';
 
 class ProfileCompletionScreen extends StatefulWidget {
@@ -22,6 +23,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   final _ageController = TextEditingController();
   final _cityController = TextEditingController();
   final _bioController = TextEditingController();
+  bool _isLoading = false;
+  final _firestore = FirebaseFirestore.instance;
 
   @override
   void dispose() {
@@ -31,7 +34,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     super.dispose();
   }
 
-  void _completeProfile() {
+  Future<void> _completeProfile() async {
     if (_ageController.text.isEmpty ||
         _cityController.text.isEmpty ||
         _bioController.text.isEmpty) {
@@ -41,20 +44,59 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       return;
     }
 
-    // Profil bilgilerini kaydet ve ana sayfaya git
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(
-          userName: widget.name,
-          userEmail: widget.email,
-          userAge: int.parse(_ageController.text),
-          userCity: _cityController.text,
-          userBio: _bioController.text,
-          userId: widget.userId,
-        ),
-      ),
-    );
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Demo kullanıcı kontrolü - Firebase olmadan çalışsın
+      if (!widget.userId.startsWith('demo-')) {
+        // Firestore'a kullanıcı bilgilerini kaydet
+        await _firestore.collection('users').doc(widget.userId).set({
+          'name': widget.name,
+          'email': widget.email,
+          'age': int.parse(_ageController.text),
+          'city': _cityController.text,
+          'bio': _bioController.text,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Ana sayfaya git
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              userName: widget.name,
+              userEmail: widget.email,
+              userAge: int.parse(_ageController.text),
+              userCity: _cityController.text,
+              userBio: _bioController.text,
+              userId: widget.userId,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Profil kaydedilemedi: $e\n\nFirebase yapılandırmasını kontrol edin.',
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -169,7 +211,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _completeProfile,
+                      onPressed: _isLoading ? null : _completeProfile,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.blue.shade800,
@@ -177,13 +219,24 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: Text(
-                        'Kaydette',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isLoading
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.blue.shade800,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Kaydette',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'profile_completion_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -8,9 +9,6 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-// Statik sayaç - her hesapla artacak
-int _userIdCounter = 1;
-
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -19,6 +17,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
+  final _auth = FirebaseAuth.instance;
 
   @override
   void dispose() {
@@ -29,24 +29,100 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _register() {
+  Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
-      // 6 haneli ID oluştur
-      String userId = _userIdCounter.toString().padLeft(6, '0');
-      _userIdCounter++;
+      setState(() {
+        _isLoading = true;
+      });
 
-      // Profil tamamlama ekranına git
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ProfileCompletionScreen(
-            name: _nameController.text,
-            email: _emailController.text,
-            userId: userId,
-          ),
-        ),
-      );
+      try {
+        // Firebase Authentication ile kullanıcı oluştur
+        final userCredential = await _auth.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        // Kullanıcı adını güncelle
+        await userCredential.user!.updateDisplayName(_nameController.text);
+
+        // Profil tamamlama ekranına git
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProfileCompletionScreen(
+                name: _nameController.text,
+                email: _emailController.text,
+                userId: userCredential.user!.uid,
+              ),
+            ),
+          );
+        }
+      } on FirebaseAuthException catch (e) {
+        String errorMessage;
+        if (e.code == 'weak-password') {
+          errorMessage = 'Şifre çok zayıf. En az 6 karakter kullanın.';
+        } else if (e.code == 'email-already-in-use') {
+          errorMessage =
+              'Bu email adresi zaten kullanılıyor. Giriş yapmayı deneyin.';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = 'Geçersiz email adresi. Doğru format: ornek@email.com';
+        } else if (e.code == 'operation-not-allowed') {
+          errorMessage =
+              'Email/şifre girişi Firebase Console\'da etkinleştirilmemiş.\n\nLütfen Firebase Console > Authentication > Sign-in method > Email/Password\'ü etkinleştirin.';
+        } else {
+          errorMessage =
+              'Kayıt oluşturulamadı\n\nHata Kodu: ${e.code}\nMesaj: ${e.message}\n\nFirebase yapılandırmasını kontrol edin.';
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 7),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Beklenmeyen hata: $e\n\nFirebase başlatıldı mı kontrol edin.\nTerminalde "flutterfire configure" çalıştırın.',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
+  }
+
+  // Demo kayıt için geçici fonksiyon
+  void _demoRegister() {
+    if (_nameController.text.isEmpty) {
+      _nameController.text = 'Demo Kullanıcı';
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileCompletionScreen(
+          name: _nameController.text.isEmpty
+              ? 'Demo Kullanıcı'
+              : _nameController.text,
+          email: 'demo${DateTime.now().millisecondsSinceEpoch}@example.com',
+          userId: 'demo-${DateTime.now().millisecondsSinceEpoch}',
+        ),
+      ),
+    );
   }
 
   @override
@@ -236,7 +312,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: _register,
+                        onPressed: _isLoading ? null : _register,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.blue.shade800,
@@ -244,10 +320,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: Text(
-                          'Kayıt Ol',
+                        child: _isLoading
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.blue.shade800,
+                                  ),
+                                ),
+                              )
+                            : Text(
+                                'Kayıt Ol',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Demo kayıt butonu (Firebase olmadan test için)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 45,
+                      child: OutlinedButton(
+                        onPressed: _demoRegister,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white, width: 2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Demo Kayıt (Firebase Olmadan)',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
