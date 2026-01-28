@@ -40,6 +40,32 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text,
         );
 
+        // Email doğrulama kontrolü
+        if (!userCredential.user!.emailVerified) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Email adresiniz doğrulanmamış. Lütfen emailinizi kontrol edin.'),
+                action: SnackBarAction(
+                  label: 'Yeniden Gönder',
+                  onPressed: () async {
+                    await userCredential.user!.sendEmailVerification();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Doğrulama emaili gönderildi.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
         // Firestore'dan kullanıcı bilgilerini al
         final userDoc = await _firestore
             .collection('users')

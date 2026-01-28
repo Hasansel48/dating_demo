@@ -45,6 +45,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // Kullanıcı adını güncelle
         await userCredential.user!.updateDisplayName(_nameController.text);
 
+        // Email doğrulama gönder
+        await userCredential.user!.sendEmailVerification();
+
+        // Kullanıcıya bilgilendirme göster
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Kayıt başarılı! Lütfen email adresinizi doğrulayın.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+
         // Profil tamamlama ekranına git
         if (mounted) {
           Navigator.pushReplacement(
