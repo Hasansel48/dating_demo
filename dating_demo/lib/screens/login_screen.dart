@@ -40,6 +40,53 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text,
         );
 
+        // Email doğrulama kontrolü
+        if (!userCredential.user!.emailVerified) {
+          // Kullanıcıyı çıkış yaptır
+          await _auth.signOut();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Email adresiniz doğrulanmamış. Lütfen emailinizi kontrol edin.'),
+                action: SnackBarAction(
+                  label: 'Yeniden Gönder',
+                  onPressed: () async {
+                    try {
+                      // Geçici olarak tekrar giriş yap
+                      final tempCred = await _auth.signInWithEmailAndPassword(
+                        email: _emailController.text.trim(),
+                        password: _passwordController.text,
+                      );
+                      await tempCred.user!.sendEmailVerification();
+                      await _auth.signOut();
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Doğrulama emaili gönderildi.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Email gönderilemedi: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
         // Firestore'dan kullanıcı bilgilerini al
         final userDoc = await _firestore
             .collection('users')
